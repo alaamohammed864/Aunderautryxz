@@ -4,9 +4,11 @@ import {
   CircuitSimulationState,
   DigitalTwinProcessState,
   PlcDialect,
+  PlcExecutionLog,
   PlcMemoryState,
   PlcProgram,
   SimulationMode,
+  SimulationSnapshot,
   TwinLabProject,
   UserRole,
 } from './types';
@@ -16,6 +18,7 @@ import { PlcSimulationEngine } from './engine/plc/plcEngine';
 import { ElectricalCircuitEngine } from './engine/electrical/circuitEngine';
 import { DigitalTwinEngine } from './engine/digitalTwin/digitalTwinEngine';
 import { LanguageCode } from './i18n/translations';
+import { Camera, CheckCircle2, RotateCcw } from 'lucide-react';
 
 // Subcomponents
 import { Header } from './components/common/Header';
@@ -28,6 +31,8 @@ import { ScadaView } from './components/scada/ScadaView';
 import { ClassroomView } from './components/classroom/ClassroomView';
 import { AdminAnalyticsView } from './components/admin/AdminAnalyticsView';
 import { DocsView } from './components/docs/DocsView';
+import { PlcDiagnosticsModal } from './components/diagnostics/PlcDiagnosticsModal';
+import { SimulationSnapshotModal } from './components/common/SimulationSnapshotModal';
 
 export const App: React.FC = () => {
   // 1. Projects State
@@ -61,6 +66,42 @@ export const App: React.FC = () => {
   const [processState, setProcessState] = useState<DigitalTwinProcessState>(activeProject.process3d);
   const [hmiScreen, setHmiScreen] = useState(activeProject.hmi);
   const [uptimeSeconds, setUptimeSeconds] = useState<number>(0);
+
+  // Diagnostics Modal State & Execution Logs
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState<boolean>(false);
+  const [diagnosticLogs, setDiagnosticLogs] = useState<PlcExecutionLog[]>([]);
+
+  // Simulation Snapshots State
+  const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
+  const [snapshots, setSnapshots] = useState<SimulationSnapshot[]>(() => {
+    try {
+      const saved = localStorage.getItem('twinlab_simulation_snapshots');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Error loading snapshots from localStorage', e);
+    }
+    return [];
+  });
+  const [snapshotToast, setSnapshotToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+
+  // Persist snapshots across browser sessions
+  useEffect(() => {
+    try {
+      localStorage.setItem('twinlab_simulation_snapshots', JSON.stringify(snapshots));
+    } catch (e) {
+      console.error('Error saving snapshots to localStorage', e);
+    }
+  }, [snapshots]);
+
+  const showSnapshotToast = useCallback((message: string, type: 'success' | 'info' = 'success') => {
+    setSnapshotToast({ message, type });
+    setTimeout(() => {
+      setSnapshotToast((prev) => (prev?.message === message ? null : prev));
+    }, 3000);
+  }, []);
 
   // Global Uptime timer
   useEffect(() => {
@@ -98,6 +139,22 @@ export const App: React.FC = () => {
     setPlcMemory(updated);
   }, []);
 
+  // Forcing handlers for PLC debugging
+  const handleForceBit = useCallback((address: string, val: boolean | number) => {
+    const updated = PlcSimulationEngine.forceBit(memRef.current, address, val);
+    setPlcMemory(updated);
+  }, []);
+
+  const handleUnforceBit = useCallback((address: string) => {
+    const updated = PlcSimulationEngine.unforceBit(memRef.current, address);
+    setPlcMemory(updated);
+  }, []);
+
+  const handleUnforceAll = useCallback(() => {
+    const updated = PlcSimulationEngine.unforceAll(memRef.current);
+    setPlcMemory(updated);
+  }, []);
+
   // Single step execution
   const handleStepSimulation = useCallback(() => {
     const deltaMs = 20;
@@ -107,13 +164,16 @@ export const App: React.FC = () => {
     setCircuitState(solvedCircuit);
 
     // 2. Scan PLC Program
-    const { updatedMemory, updatedProgram } = PlcSimulationEngine.executeScanCycle(
+    const { updatedMemory, updatedProgram, logs } = PlcSimulationEngine.executeScanCycle(
       memRef.current,
       programRef.current,
       deltaMs
     );
     setPlcMemory(updatedMemory);
     setLadderProgram(updatedProgram);
+    if (logs && logs.length > 0) {
+      setDiagnosticLogs(logs);
+    }
 
     // 3. Step 3D Process
     const getPlcOutput = (addr: string) => Boolean(updatedMemory.outputs[addr]);
@@ -151,7 +211,7 @@ export const App: React.FC = () => {
       });
 
       // 3. Scan PLC Ladder Logic Program
-      const { updatedMemory, updatedProgram } = PlcSimulationEngine.executeScanCycle(
+      const { updatedMemory, updatedProgram, logs } = PlcSimulationEngine.executeScanCycle(
         memRef.current,
         programRef.current,
         deltaMs
@@ -186,6 +246,9 @@ export const App: React.FC = () => {
       setLadderProgram(updatedProgram);
       setCircuitState(solvedCircuit);
       setProcessState(updatedProcess);
+      if (logs && logs.length > 0) {
+        setDiagnosticLogs(logs);
+      }
 
       const elapsed = Math.round((performance.now() - startTime) * 10) / 10;
       setScanStats((prev) => ({
@@ -196,6 +259,95 @@ export const App: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [simulationMode, speedMultiplier]);
+
+  // Simulation Snapshot Actions
+  const handleTakeSnapshot = useCallback((name?: string, description?: string): SimulationSnapshot => {
+    const currentMem = memRef.current;
+    const currentProc = processRef.current;
+
+    // Deep copy current memory and process state
+    const clonedMemory: PlcMemoryState = JSON.parse(JSON.stringify(currentMem));
+    const clonedProcess: DigitalTwinProcessState = JSON.parse(JSON.stringify(currentProc));
+
+    const activeInputsCount = Object.values(clonedMemory.inputs || {}).filter(Boolean).length;
+    const activeOutputsCount = Object.values(clonedMemory.outputs || {}).filter(Boolean).length;
+    const activeFlagsCount = Object.values(clonedMemory.memory || {}).filter(Boolean).length;
+    const activeTimersCount = Object.values(clonedMemory.timers || {}).filter((t) => t.q || t.et > 0).length;
+    const forcedBitsCount = Object.keys(clonedMemory.forcedBits || {}).length;
+
+    const now = Date.now();
+    const dateObj = new Date(now);
+    const timeFormatted = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    const snapshot: SimulationSnapshot = {
+      id: `snap_${now}_${Math.random().toString(36).substring(2, 8)}`,
+      name: name || `Snapshot ${timeFormatted} (${activeOutputsCount} Out, ${activeInputsCount} In)`,
+      description,
+      timestamp: now,
+      timeFormatted,
+      memory: clonedMemory,
+      simulationMode,
+      processState: clonedProcess,
+      metadata: {
+        activeInputsCount,
+        activeOutputsCount,
+        activeFlagsCount,
+        activeTimersCount,
+        forcedBitsCount,
+        scanCount: clonedMemory.scanCount,
+        cycleTimeMs: clonedMemory.scanCycleTime || 20,
+      },
+    };
+
+    setSnapshots((prev) => [snapshot, ...prev]);
+    showSnapshotToast(`Snapshot "${snapshot.name}" saved!`, 'success');
+    return snapshot;
+  }, [simulationMode, showSnapshotToast]);
+
+  const handleRestoreSnapshot = useCallback((snapshotId: string) => {
+    const snapshot = snapshots.find((s) => s.id === snapshotId);
+    if (!snapshot) return;
+
+    // Deep clone to safely apply memory
+    const restoredMem: PlcMemoryState = JSON.parse(JSON.stringify(snapshot.memory));
+    setPlcMemory(restoredMem);
+    memRef.current = restoredMem;
+
+    if (snapshot.processState) {
+      const restoredProc: DigitalTwinProcessState = JSON.parse(JSON.stringify(snapshot.processState));
+      setProcessState(restoredProc);
+      processRef.current = restoredProc;
+    }
+
+    showSnapshotToast(`Restored PLC state: "${snapshot.name}"`, 'success');
+  }, [snapshots, showSnapshotToast]);
+
+  const handleRestoreLastSnapshot = useCallback(() => {
+    if (snapshots.length === 0) {
+      showSnapshotToast('No saved snapshots to restore. Click SNAPSHOT to save one!', 'info');
+      return;
+    }
+    handleRestoreSnapshot(snapshots[0].id);
+  }, [snapshots, handleRestoreSnapshot, showSnapshotToast]);
+
+  const handleDeleteSnapshot = useCallback((snapshotId: string) => {
+    setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId));
+    showSnapshotToast('Snapshot deleted', 'info');
+  }, [showSnapshotToast]);
+
+  const handleClearAllSnapshots = useCallback(() => {
+    setSnapshots([]);
+    showSnapshotToast('All simulation snapshots cleared', 'info');
+  }, [showSnapshotToast]);
+
+  const handleImportSnapshots = useCallback((imported: SimulationSnapshot[]) => {
+    setSnapshots((prev) => {
+      const existingIds = new Set(prev.map((s) => s.id));
+      const newOnes = imported.filter((s) => !existingIds.has(s.id));
+      return [...newOnes, ...prev];
+    });
+    showSnapshotToast(`Imported ${imported.length} snapshot(s)`, 'success');
+  }, [showSnapshotToast]);
 
   // Project Management Actions
   const handleSelectProject = (proj: TwinLabProject) => {
@@ -433,6 +585,12 @@ export const App: React.FC = () => {
         language={language}
         setLanguage={setLanguage}
         scanStats={scanStats}
+        onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
+        forcedCount={Object.keys(plcMemory.forcedBits || {}).length}
+        onOpenSnapshots={() => setIsSnapshotModalOpen(true)}
+        onQuickTakeSnapshot={() => handleTakeSnapshot()}
+        onQuickRestoreLastSnapshot={handleRestoreLastSnapshot}
+        snapshotsCount={snapshots.length}
       />
 
       {/* Main Multi-Domain Workspace */}
@@ -458,6 +616,10 @@ export const App: React.FC = () => {
             onSetNumeric={handleSetNumeric}
             simulationMode={simulationMode}
             dialect={plcDialect}
+            onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
+            onOpenSnapshots={() => setIsSnapshotModalOpen(true)}
+            onQuickTakeSnapshot={() => handleTakeSnapshot()}
+            snapshotsCount={snapshots.length}
           />
         )}
 
@@ -521,6 +683,47 @@ export const App: React.FC = () => {
         {currentView === 'docs' && <DocsView />}
       </main>
 
+      {/* Real-time Diagnostics & Debugging Modal */}
+      <PlcDiagnosticsModal
+        isOpen={isDiagnosticsOpen}
+        onClose={() => setIsDiagnosticsOpen(false)}
+        memory={plcMemory}
+        program={ladderProgram}
+        dialect={plcDialect}
+        simulationMode={simulationMode}
+        onSetBit={handleSetBit}
+        onSetNumeric={handleSetNumeric}
+        onForceBit={handleForceBit}
+        onUnforceBit={handleUnforceBit}
+        onUnforceAll={handleUnforceAll}
+        onStepSimulation={handleStepSimulation}
+        recentLogs={diagnosticLogs}
+      />
+
+      {/* Simulation Snapshots & Memory State Restore Modal */}
+      <SimulationSnapshotModal
+        isOpen={isSnapshotModalOpen}
+        onClose={() => setIsSnapshotModalOpen(false)}
+        snapshots={snapshots}
+        currentMemory={plcMemory}
+        currentProcessState={processState}
+        simulationMode={simulationMode}
+        dialect={plcDialect}
+        onTakeSnapshot={handleTakeSnapshot}
+        onRestoreSnapshot={handleRestoreSnapshot}
+        onDeleteSnapshot={handleDeleteSnapshot}
+        onClearAllSnapshots={handleClearAllSnapshots}
+        onImportSnapshots={handleImportSnapshots}
+      />
+
+      {/* Floating Instant Toast Feedback for Snapshot Actions */}
+      {snapshotToast && (
+        <div className="fixed bottom-12 right-6 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-cyan-500/80 text-white font-mono text-xs shadow-2xl shadow-cyan-950/80 backdrop-blur animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{snapshotToast.message}</span>
+        </div>
+      )}
+
       {/* Professional Polish Workstation Status Footer */}
       <footer className="h-8 bg-slate-900 border-t border-slate-800 px-4 flex items-center justify-between shrink-0 text-[10px] text-slate-400 font-medium select-none z-20">
         <div className="flex items-center gap-4 sm:gap-6">
@@ -536,9 +739,17 @@ export const App: React.FC = () => {
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]" />
             <span className="font-mono text-slate-300">Students: 14 Active</span>
           </div>
-          <div className="hidden lg:flex items-center gap-1.5">
+          <button
+            onClick={() => setIsDiagnosticsOpen(true)}
+            title="Open PLC Diagnostics Panel"
+            className="hidden lg:flex items-center gap-1.5 hover:text-cyan-300 transition-colors cursor-pointer"
+          >
             <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-            <span className="font-mono text-slate-300">Scan Time: {scanStats.cycleTime}ms</span>
+            <span className="font-mono text-slate-300">Scan Time: {scanStats.cycleTime}ms (Diagnostics)</span>
+          </button>
+          <div className="hidden xl:flex items-center gap-1.5 border-l border-slate-800 pl-4">
+            <span className="text-slate-500 font-mono">Dev & Concept:</span>
+            <span className="text-blue-400 font-mono font-bold">Eng ALAA MOHAMMED</span>
           </div>
         </div>
 

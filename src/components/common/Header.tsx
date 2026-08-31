@@ -30,6 +30,10 @@ import {
   Globe,
   UserCheck,
   Zap,
+  Camera,
+  RotateCcw,
+  Bookmark,
+  History,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -53,6 +57,12 @@ interface HeaderProps {
   language: LanguageCode;
   setLanguage: (lang: LanguageCode) => void;
   scanStats: { cycleTime: number; scanCount: number };
+  onOpenDiagnostics?: () => void;
+  forcedCount?: number;
+  onOpenSnapshots?: () => void;
+  onQuickTakeSnapshot?: () => void;
+  onQuickRestoreLastSnapshot?: () => void;
+  snapshotsCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -76,6 +86,12 @@ export const Header: React.FC<HeaderProps> = ({
   language,
   setLanguage,
   scanStats,
+  onOpenDiagnostics,
+  forcedCount = 0,
+  onOpenSnapshots,
+  onQuickTakeSnapshot,
+  onQuickRestoreLastSnapshot,
+  snapshotsCount = 0,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
@@ -128,6 +144,10 @@ export const Header: React.FC<HeaderProps> = ({
                   Pro v4.2
                 </span>
               </h1>
+              <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                <span>Dev & Concept:</span>
+                <span className="text-blue-400 font-semibold">Eng ALAA MOHAMMED</span>
+              </div>
             </div>
           </div>
 
@@ -280,6 +300,70 @@ export const Header: React.FC<HeaderProps> = ({
               </select>
             </div>
           </div>
+
+          {/* Simulation Snapshots & Memory State Controls */}
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 shadow-inner">
+            {onQuickTakeSnapshot && (
+              <button
+                onClick={onQuickTakeSnapshot}
+                title="Save Quick Simulation Snapshot (Freeze current PLC memory)"
+                className="flex items-center gap-1 px-2 py-1.5 rounded bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 hover:text-white text-xs font-mono font-bold transition-all cursor-pointer shadow-sm group"
+              >
+                <Camera className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span className="hidden sm:inline">SNAPSHOT</span>
+              </button>
+            )}
+
+            {onQuickRestoreLastSnapshot && (
+              <button
+                onClick={onQuickRestoreLastSnapshot}
+                disabled={snapshotsCount === 0}
+                title={
+                  snapshotsCount > 0
+                    ? 'Restore PLC State to Previous Snapshot'
+                    : 'No saved snapshots to restore'
+                }
+                className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-mono font-bold transition-all ${
+                  snapshotsCount > 0
+                    ? 'bg-emerald-950/90 hover:bg-emerald-900 border-emerald-700/60 text-emerald-300 hover:text-white cursor-pointer shadow-sm group'
+                    : 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${snapshotsCount > 0 ? 'text-emerald-400 group-hover:-rotate-45 transition-transform' : 'text-slate-600'}`} />
+                <span className="hidden sm:inline">RESTORE</span>
+              </button>
+            )}
+
+            {onOpenSnapshots && (
+              <button
+                onClick={onOpenSnapshots}
+                title="Open Simulation Snapshots Library & Memory Diff Inspector"
+                className="flex items-center gap-1 px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-mono font-bold transition-all cursor-pointer"
+              >
+                <Bookmark className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-cyan-300 text-[10px]">
+                  {snapshotsCount}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Diagnostics Modal Trigger Button */}
+          {onOpenDiagnostics && (
+            <button
+              onClick={onOpenDiagnostics}
+              title="Open Real-Time PLC Memory & Execution Diagnostics"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900/90 border border-blue-700/60 text-blue-300 hover:text-white text-xs font-mono font-bold shadow-md shadow-blue-950 transition-all cursor-pointer group"
+            >
+              <Cpu className="w-4 h-4 text-blue-400 group-hover:rotate-12 transition-transform" />
+              <span className="hidden sm:inline">DIAGNOSTICS</span>
+              {forcedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded bg-amber-500 text-slate-950 text-[10px] font-black animate-pulse">
+                  {forcedCount}F
+                </span>
+              )}
+            </button>
+          )}
 
           {/* User Role, Dialect & Language */}
           <div className="hidden lg:flex items-center gap-2">

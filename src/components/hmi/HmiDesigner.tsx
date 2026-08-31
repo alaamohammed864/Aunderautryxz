@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   HmiScreen,
   HmiWidget,
@@ -253,35 +254,76 @@ export const HmiDesigner: React.FC<HmiDesignerProps> = ({
               const numVal = getTagNumeric(widget.bindingTag);
 
               return (
-                <div
+                <motion.div
                   key={widget.id}
                   onClick={() => handleWidgetPress(widget)}
+                  whileHover={{ scale: isDesignMode ? 1.02 : 1.01 }}
+                  whileTap={{ scale: isDesignMode ? 0.98 : 0.96 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{
+                    opacity: 1,
+                    scale: 1,
+                    borderColor: isSelected
+                      ? '#a855f7'
+                      : isBitActive && (widget.type === 'PUSH_BUTTON' || widget.type === 'PILOT_LAMP')
+                      ? '#10b981'
+                      : '#334155',
+                  }}
+                  transition={{ duration: 0.2 }}
                   style={{
                     left: `${widget.x}px`,
                     top: `${widget.y}px`,
                     width: `${widget.width}px`,
                     height: `${widget.height}px`,
                   }}
-                  className={`absolute rounded-xl border p-2 flex flex-col items-center justify-center transition-all ${
-                    isDesignMode ? 'cursor-move' : 'cursor-pointer active:scale-95'
+                  className={`absolute rounded-xl border p-2 flex flex-col items-center justify-center select-none ${
+                    isDesignMode ? 'cursor-move' : 'cursor-pointer'
                   } ${
                     isSelected
-                      ? 'border-purple-400 ring-2 ring-purple-400/40 bg-purple-950/20'
-                      : 'border-slate-800 bg-slate-900/90 hover:border-slate-700'
+                      ? 'ring-2 ring-purple-400/40 bg-purple-950/20'
+                      : 'bg-slate-900/90'
                   }`}
                 >
                   {/* Push Button Widget */}
                   {widget.type === 'PUSH_BUTTON' && (
-                    <div className="flex flex-col items-center justify-center w-full h-full">
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                          isBitActive
-                            ? 'bg-emerald-400 text-slate-950 ring-4 ring-emerald-500/40 shadow-lg shadow-emerald-500/50'
-                            : 'bg-gradient-to-b from-slate-700 to-slate-800 text-slate-200 shadow-md'
-                        }`}
+                    <div className="flex flex-col items-center justify-center w-full h-full relative">
+                      {/* Subtle Expanding Ripple on Active State */}
+                      <AnimatePresence>
+                        {isBitActive && (
+                          <motion.div
+                            key="ripple"
+                            initial={{ scale: 0.8, opacity: 0.8 }}
+                            animate={{ scale: 1.35, opacity: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ repeat: Infinity, duration: 1.6, ease: 'easeOut' }}
+                            className="absolute w-12 h-12 rounded-full border-2 border-emerald-400 pointer-events-none"
+                          />
+                        )}
+                      </AnimatePresence>
+
+                      <motion.div
+                        animate={{
+                          scale: isBitActive ? 0.94 : 1,
+                          y: isBitActive ? 1.5 : 0,
+                          backgroundColor: isBitActive ? '#10b981' : '#334155',
+                          boxShadow: isBitActive
+                            ? '0 0 18px rgba(16,185,129,0.7), inset 0 2px 4px rgba(0,0,0,0.3)'
+                            : '0 4px 6px -1px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.15)',
+                        }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                        className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-xs relative overflow-hidden"
                       >
-                        {isBitActive ? 'ON' : 'OFF'}
-                      </div>
+                        <motion.span
+                          key={isBitActive ? 'ON' : 'OFF'}
+                          initial={{ opacity: 0, y: isBitActive ? 4 : -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className={`font-mono ${isBitActive ? 'text-slate-950 font-extrabold' : 'text-slate-200'}`}
+                        >
+                          {isBitActive ? 'ON' : 'OFF'}
+                        </motion.span>
+                      </motion.div>
                       <span className="text-[10px] font-bold text-slate-300 mt-1 truncate max-w-full">
                         {widget.label}
                       </span>
@@ -291,30 +333,78 @@ export const HmiDesigner: React.FC<HmiDesignerProps> = ({
 
                   {/* Pilot Lamp Widget */}
                   {widget.type === 'PILOT_LAMP' && (
-                    <div className="flex flex-col items-center justify-center w-full h-full">
-                      <div
-                        className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${
-                          isBitActive
-                            ? 'bg-emerald-400 border-emerald-300 shadow-lg shadow-emerald-500/80 animate-pulse'
-                            : 'bg-slate-900 border-slate-700'
-                        }`}
+                    <div className="flex flex-col items-center justify-center w-full h-full relative">
+                      <motion.div
+                        animate={{
+                          scale: isBitActive ? [1, 1.06, 1] : 1,
+                          backgroundColor: isBitActive ? '#10b981' : '#0f172a',
+                          borderColor: isBitActive ? '#6ee7b7' : '#334155',
+                          boxShadow: isBitActive
+                            ? [
+                                '0 0 14px rgba(16,185,129,0.6), inset 0 0 8px rgba(255,255,255,0.7)',
+                                '0 0 26px rgba(16,185,129,0.9), inset 0 0 12px rgba(255,255,255,0.9)',
+                                '0 0 14px rgba(16,185,129,0.6), inset 0 0 8px rgba(255,255,255,0.7)',
+                              ]
+                            : '0 2px 4px rgba(0,0,0,0.5)',
+                        }}
+                        transition={{
+                          scale: { duration: 2, repeat: isBitActive ? Infinity : 0, ease: 'easeInOut' },
+                          boxShadow: { duration: 2, repeat: isBitActive ? Infinity : 0, ease: 'easeInOut' },
+                          duration: 0.25,
+                        }}
+                        className="relative w-10 h-10 rounded-full border-2 flex items-center justify-center overflow-hidden"
                       >
-                        <Sparkles className={`w-4 h-4 ${isBitActive ? 'text-white' : 'text-slate-700'}`} />
-                      </div>
+                        {/* Light filament sheen / refraction */}
+                        {isBitActive && (
+                          <motion.div
+                            initial={{ rotate: 0 }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+                            className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none"
+                          />
+                        )}
+                        <motion.div
+                          animate={{ scale: isBitActive ? [1, 1.15, 1] : 1 }}
+                          transition={{ duration: 2, repeat: isBitActive ? Infinity : 0 }}
+                        >
+                          <Sparkles
+                            className={`w-4 h-4 transition-colors ${
+                              isBitActive ? 'text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.9)]' : 'text-slate-700'
+                            }`}
+                          />
+                        </motion.div>
+                      </motion.div>
                       <span className="text-[10px] font-bold text-slate-300 mt-1 truncate max-w-full">
                         {widget.label}
                       </span>
-                      <span className="text-[8px] font-mono text-emerald-400">
+                      <motion.span
+                        animate={{ color: isBitActive ? '#34d399' : '#94a3b8' }}
+                        className="text-[8px] font-mono font-semibold"
+                      >
                         {isBitActive ? 'ENERGIZED' : 'IDLE'}
-                      </span>
+                      </motion.span>
                     </div>
                   )}
 
                   {/* Radial Gauge Widget */}
                   {widget.type === 'RADIAL_GAUGE' && (
                     <div className="flex flex-col items-center justify-center w-full h-full text-center">
-                      <Gauge className="w-6 h-6 text-cyan-400 mb-0.5" />
-                      <span className="text-base font-bold font-mono text-cyan-300">{numVal}</span>
+                      <motion.div
+                        animate={{ rotate: ((numVal - (widget.minValue || 0)) / ((widget.maxValue || 100) - (widget.minValue || 0))) * 180 - 90 }}
+                        transition={{ type: 'spring', stiffness: 70, damping: 15 }}
+                        className="mb-0.5 origin-center"
+                      >
+                        <Gauge className="w-6 h-6 text-cyan-400" />
+                      </motion.div>
+                      <motion.span
+                        key={numVal}
+                        initial={{ scale: 1.1, color: '#38bdf8' }}
+                        animate={{ scale: 1, color: '#67e8f9' }}
+                        transition={{ duration: 0.2 }}
+                        className="text-base font-bold font-mono"
+                      >
+                        {numVal}
+                      </motion.span>
                       <span className="text-[10px] text-slate-400 truncate">{widget.label}</span>
                     </div>
                   )}
@@ -322,12 +412,28 @@ export const HmiDesigner: React.FC<HmiDesignerProps> = ({
                   {/* Tank Level Widget */}
                   {widget.type === 'TANK_LEVEL' && (
                     <div className="flex flex-col items-center justify-between w-full h-full p-1">
-                      <span className="text-[9px] font-bold text-cyan-300">{numVal}%</span>
-                      <div className="w-8 h-24 bg-slate-950 border border-slate-700 rounded overflow-hidden relative">
-                        <div
-                          className="absolute bottom-0 left-0 right-0 bg-cyan-500 transition-all duration-150"
-                          style={{ height: `${Math.min(100, Math.max(0, numVal))}%` }}
-                        />
+                      <motion.span
+                        key={numVal}
+                        initial={{ opacity: 0.7 }}
+                        animate={{ opacity: 1 }}
+                        className="text-[9px] font-bold text-cyan-300 font-mono"
+                      >
+                        {numVal}%
+                      </motion.span>
+                      <div className="w-8 h-24 bg-slate-950 border border-slate-700 rounded overflow-hidden relative shadow-inner">
+                        <motion.div
+                          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-cyan-600 to-cyan-400"
+                          initial={false}
+                          animate={{ height: `${Math.min(100, Math.max(0, numVal))}%` }}
+                          transition={{ type: 'spring', stiffness: 70, damping: 15 }}
+                        >
+                          {/* Surface meniscus shine line */}
+                          <motion.div
+                            animate={{ opacity: [0.6, 1, 0.6] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                            className="w-full h-1 bg-cyan-200 shadow-[0_0_6px_#38bdf8]"
+                          />
+                        </motion.div>
                       </div>
                       <span className="text-[8px] text-slate-400 truncate">{widget.label}</span>
                     </div>
@@ -337,8 +443,16 @@ export const HmiDesigner: React.FC<HmiDesignerProps> = ({
                   {widget.type === 'SLIDER' && (
                     <div className="flex flex-col items-center justify-center w-full h-full px-2">
                       <div className="flex justify-between w-full text-[10px] mb-1">
-                        <span className="text-slate-300 font-bold">{widget.label}</span>
-                        <span className="text-cyan-400 font-mono font-bold">{numVal}</span>
+                        <span className="text-slate-300 font-bold truncate">{widget.label}</span>
+                        <motion.span
+                          key={numVal}
+                          initial={{ scale: 1.15, color: '#38bdf8' }}
+                          animate={{ scale: 1, color: '#22d3ee' }}
+                          transition={{ duration: 0.15 }}
+                          className="font-mono font-bold"
+                        >
+                          {numVal}
+                        </motion.span>
                       </div>
                       <input
                         type="range"
@@ -352,7 +466,7 @@ export const HmiDesigner: React.FC<HmiDesignerProps> = ({
                       />
                     </div>
                   )}
-                </div>
+                </motion.div>
               );
             })}
           </div>

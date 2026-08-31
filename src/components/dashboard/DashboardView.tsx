@@ -63,7 +63,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 Industrial Automation Digital Twin Laboratory
               </h1>
-              <p className="text-slate-400 text-sm mt-1 max-w-2xl">
+              <div className="flex items-center gap-2 mt-1 text-xs text-blue-400 font-mono">
+                <span className="text-slate-400">Concept & Lead Developer:</span>
+                <span className="font-bold text-slate-200 bg-slate-950 px-2 py-0.5 rounded border border-blue-900/60">
+                  Eng ALAA MOHAMMED
+                </span>
+              </div>
+              <p className="text-slate-400 text-sm mt-1.5 max-w-2xl">
                 Design and simulate complete multi-domain automation systems: Electrical schematics, PLC Ladder Logic, 3D mechanical processes, visual HMI touchscreens, and SCADA monitoring in a unified deterministic browser engine.
               </p>
             </div>

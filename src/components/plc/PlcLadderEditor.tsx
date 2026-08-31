@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   LadderElement,
   LadderRung,
@@ -22,7 +22,11 @@ import {
   Cpu,
   Lock,
   Unlock,
+  Compass,
+  Camera,
+  Bookmark,
 } from 'lucide-react';
+import { PlcLadderMiniMap } from './PlcLadderMiniMap';
 
 interface PlcLadderEditorProps {
   program: PlcProgram;
@@ -32,6 +36,10 @@ interface PlcLadderEditorProps {
   onSetNumeric: (address: string, val: number) => void;
   simulationMode: SimulationMode;
   dialect: PlcDialect;
+  onOpenDiagnostics?: () => void;
+  onOpenSnapshots?: () => void;
+  onQuickTakeSnapshot?: () => void;
+  snapshotsCount?: number;
 }
 
 export const PlcLadderEditor: React.FC<PlcLadderEditorProps> = ({
@@ -42,12 +50,21 @@ export const PlcLadderEditor: React.FC<PlcLadderEditorProps> = ({
   onSetNumeric,
   simulationMode,
   dialect,
+  onOpenDiagnostics,
+  onOpenSnapshots,
+  onQuickTakeSnapshot,
+  snapshotsCount = 0,
 }) => {
   const [selectedElement, setSelectedElement] = useState<LadderElement | null>(null);
   const [selectedRungId, setSelectedRungId] = useState<string | null>(program.rungs[0]?.id || null);
   const [editingAddress, setEditingAddress] = useState<string>('');
   const [editingSymbol, setEditingSymbol] = useState<string>('');
   const [editingPreset, setEditingPreset] = useState<number>(3000);
+  const [isMiniMapCollapsed, setIsMiniMapCollapsed] = useState<boolean>(false);
+
+  // References for scrolling and mini-map sync
+  const ladderContainerRef = useRef<HTMLDivElement>(null);
+  const rungRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
   const isBitTrue = (addr: string): boolean => {
     const clean = addr.trim().toUpperCase();
@@ -470,6 +487,50 @@ export const PlcLadderEditor: React.FC<PlcLadderEditorProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Toggle Mini-Map button */}
+            <button
+              onClick={() => setIsMiniMapCollapsed(!isMiniMapCollapsed)}
+              title={isMiniMapCollapsed ? 'Show Mini-Map Navigator' : 'Hide Mini-Map Navigator'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold transition-all cursor-pointer border ${
+                !isMiniMapCollapsed
+                  ? 'bg-cyan-950/90 text-cyan-300 border-cyan-700/80 shadow-sm shadow-cyan-950'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+              }`}
+            >
+              <Compass className={`w-3.5 h-3.5 ${!isMiniMapCollapsed ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline">MINI-MAP</span>
+              <span className="text-[10px] px-1 py-0.2 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                {program.rungs.length}
+              </span>
+            </button>
+
+            {/* Snapshots Button */}
+            {onOpenSnapshots && (
+              <button
+                onClick={onOpenSnapshots}
+                title="Simulation Snapshots & State Restore"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-cyan-300 text-xs font-mono font-bold transition-all cursor-pointer shadow-sm"
+              >
+                <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">SNAPSHOTS</span>
+                {snapshotsCount > 0 && (
+                  <span className="text-[10px] px-1 py-0.2 rounded bg-slate-900 border border-slate-700 text-cyan-300">
+                    {snapshotsCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {onOpenDiagnostics && (
+              <button
+                onClick={onOpenDiagnostics}
+                title="Open Real-Time Diagnostics, Memory Map & Execution Logs"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-950 hover:bg-blue-900 border border-blue-700/60 text-blue-300 hover:text-white text-xs font-mono font-bold transition-all cursor-pointer shadow-sm"
+              >
+                <Cpu className="w-3.5 h-3.5 text-blue-400" />
+                <span>DIAGNOSTICS</span>
+              </button>
+            )}
             <button
               onClick={addRung}
               className="flex items-center gap-1 px-3 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs shadow transition-all cursor-pointer"
@@ -481,7 +542,7 @@ export const PlcLadderEditor: React.FC<PlcLadderEditorProps> = ({
         </div>
 
         {/* Scrollable Ladder Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6" ref={ladderContainerRef}>
           {program.rungs.map((rung) => {
             const isSelected = selectedRungId === rung.id;
             const isRungEnergized = rung.isEnergized;
@@ -489,6 +550,10 @@ export const PlcLadderEditor: React.FC<PlcLadderEditorProps> = ({
             return (
               <div
                 key={rung.id}
+                id={`rung-${rung.id}`}
+                ref={(el) => {
+                  rungRefs.current[rung.id] = el;
+                }}
                 onClick={() => setSelectedRungId(rung.id)}
                 className={`relative rounded-xl border transition-all p-3 sm:p-4 bg-slate-900/90 ${
                   isSelected
@@ -976,6 +1041,19 @@ export const PlcLadderEditor: React.FC<PlcLadderEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Right: Visual Ladder Mini-Map Navigator */}
+      <PlcLadderMiniMap
+        program={program}
+        memory={memory}
+        selectedRungId={selectedRungId}
+        onSelectRung={(id) => setSelectedRungId(id)}
+        scrollContainerRef={ladderContainerRef}
+        rungRefs={rungRefs}
+        dialect={dialect}
+        isCollapsed={isMiniMapCollapsed}
+        onToggleCollapse={() => setIsMiniMapCollapsed(!isMiniMapCollapsed)}
+      />
     </div>
   );
 };

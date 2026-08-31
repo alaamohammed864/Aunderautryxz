@@ -128,6 +128,50 @@ export interface PlcMemoryState {
   scanCycleTime: number;
   scanCount: number;
   edges: Record<string, boolean>; // remembers previous edge state
+  forcedBits?: Record<string, boolean | number>; // Forced I/O for debugging
+}
+
+// --- PLC DIAGNOSTICS & EXECUTION LOGS ---
+export type PlcLogCategory = 'CYCLE' | 'RUNG' | 'TIMER' | 'COUNTER' | 'FORCE' | 'FAULT' | 'MEMORY';
+export type PlcLogSeverity = 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR';
+
+export interface PlcExecutionLog {
+  id: string;
+  timestamp: number;
+  timeStr: string;
+  category: PlcLogCategory;
+  severity: PlcLogSeverity;
+  task: string;
+  rungNumber?: number;
+  address?: string;
+  message: string;
+  details?: string;
+  value?: boolean | number | string;
+}
+
+export interface PlcTaskMetric {
+  id: string;
+  name: string;
+  type: 'CYCLIC' | 'INTERRUPT' | 'EVENT' | 'FAULT';
+  priority: number;
+  cycleMs: number;
+  lastDurationUs: number;
+  avgDurationUs: number;
+  maxDurationUs: number;
+  executions: number;
+  status: 'ACTIVE' | 'RUNNING' | 'IDLE' | 'YIELD';
+  overrunCount: number;
+}
+
+export interface PlcMemoryAreaStats {
+  area: 'INPUTS' | 'OUTPUTS' | 'FLAGS' | 'TIMERS' | 'COUNTERS' | 'DATA_BLOCKS';
+  name: string;
+  prefix: string;
+  capacityBytes: number;
+  usedBytes: number;
+  totalElements: number;
+  activeCount: number;
+  description: string;
 }
 
 // --- ELECTRICAL SIMULATOR TYPES ---
@@ -507,6 +551,27 @@ export interface SubmissionResult {
     feedback: string;
   }[];
   overallFeedback: string;
+}
+
+// --- SIMULATION SNAPSHOTS ---
+export interface SimulationSnapshot {
+  id: string;
+  name: string;
+  description?: string;
+  timestamp: number;
+  timeFormatted: string;
+  memory: PlcMemoryState;
+  simulationMode: SimulationMode;
+  processState?: DigitalTwinProcessState;
+  metadata: {
+    activeInputsCount: number;
+    activeOutputsCount: number;
+    activeFlagsCount: number;
+    activeTimersCount: number;
+    forcedBitsCount: number;
+    scanCount: number;
+    cycleTimeMs: number;
+  };
 }
 
 // --- PROJECT FILE SCHEMA ---
