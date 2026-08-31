@@ -1,0 +1,7 @@
+{
+  "name": "TwinLab - Industrial Automation Digital Twin Lab",
+  "description": "Complete browser-based PLC, Electrical Circuit, 3D Digital Twin, HMI, SCADA, and Virtual Classroom simulation laboratory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
